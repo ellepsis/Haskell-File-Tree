@@ -24,8 +24,8 @@ main = do
 
 getSubDirContents :: FilePath -> IO [FileTree]
 getSubDirContents dirPath = do
-	contents <- map (dirPath ++) <$> (filter (\x -> x /= "." && x /= ".." ) <$> tryReadContent dirPath)
-	if (contents == ["\NUL"]) then return $ errorPathFileTree dirPath
+	contents <- map (dirPath ++) <$> (map ('/' :) <$> (filter (\x -> x /= "." && x /= ".." ) <$> tryReadContent dirPath))
+	if (checkFail contents) then return $ errorPathFileTree dirPath
 		else do
 			isDirs <-  sequence $ map doesDirectoryExist contents
 			createTree contents isDirs				
@@ -52,3 +52,7 @@ tryReadContent path = handle possibleError (getDirectoryContents path)
 	where 
 		possibleError :: IOException -> IO [FilePath]
 		possibleError _ = return ["\NUL"]
+
+checkFail :: [FilePath] -> Bool
+checkFail [] = False
+checkFail list = last (head list) == '\NUL'
