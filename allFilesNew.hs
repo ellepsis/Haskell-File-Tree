@@ -12,19 +12,17 @@ import Control.Concurrent
 type FileName = String
 
 data FileTree = 
-	File {name :: FileName} 
-	| Dir {name :: FileName, contents :: [FileTree] } 
-	| Failed {name :: FileName} deriving Show
-
-data PathFileTree = PathFileTree {path :: FilePath, pathFileTree :: [PathFileTree], fileTree :: FileTree} deriving Show
+	File {name :: FilePath} 
+	| Dir {name :: FilePath, contents :: [FileTree] } 
+	| Failed {name :: FilePath} deriving Show
 
 main = do
 	path <- getLine
-	--testpath <- IO "C:\\Leksah\\"
+	--path <- return "C:\\Leksah\\"
 	list <- getSubDirContents path
 	putStrLn (show list)
 
-getSubDirContents :: FilePath -> IO [PathFileTree]
+getSubDirContents :: FilePath -> IO [FileTree]
 getSubDirContents dirPath = do
 	contents <- map (dirPath ++) <$> (filter (\x -> x /= "." && x /= ".." ) <$> tryReadContent dirPath)
 	if (contents == ["\NUL"]) then return $ errorPathFileTree dirPath
@@ -33,21 +31,21 @@ getSubDirContents dirPath = do
 			createTree contents isDirs				
 	
 
-createTree :: [FilePath] -> [Bool] -> IO [PathFileTree]
+createTree :: [FilePath] -> [Bool] -> IO [FileTree]
 createTree filePaths isDir = do
 	a <- sequence( zipWith (\x y -> 
 		if (x==True) 
 			then ( do 
 				subDirContents <- getSubDirContents y
-				return $! PathFileTree y subDirContents $! Dir (fileNameFromPath y) (map fileTree subDirContents)) 
-			else (return $! PathFileTree y [] $! (File . fileNameFromPath)  ('/':y))) isDir filePaths)
+				return $! Dir y subDirContents )
+			else return (File y)) isDir filePaths)
 	return a
 
 fileNameFromPath :: FilePath -> FileName
 fileNameFromPath fp = last (splitOn "/" fp)
 
-errorPathFileTree :: FilePath -> [PathFileTree]
-errorPathFileTree path = [PathFileTree path [] (Failed $ fileNameFromPath path)]
+errorPathFileTree :: FilePath -> [FileTree]
+errorPathFileTree path = [Failed path]
 
 tryReadContent :: FilePath -> IO [FilePath]
 tryReadContent path = handle possibleError (getDirectoryContents path)
