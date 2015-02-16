@@ -7,7 +7,9 @@ import Control.Monad
 import Control.Exception as E
 import Data.List (foldl')
 import Data.List.Split (splitOn)
+import qualified Data.Map as M 
 import Data.Text (Text, pack, unpack)
+
 
 -- FileTree -> (File count, Directory count, Error count)
 countFilesAndDirectories :: FileTree -> (Int, Int, Int)
@@ -37,10 +39,25 @@ directorySize filePath fileTree =
 				sumSizes (allSize, errors) (Left size) = (allSize+size, errors)
 				sumSizes (allSize, errors) (Right string) = (allSize, string : errors)
 
-pritSizeInHumanReadableFormat :: Integer -> String
-pritSizeInHumanReadableFormat bytes 
-	| quot bytes (2^40) > 0 = (show $ quot bytes (2^40)) ++ " TiB " ++ (pritSizeInHumanReadableFormat $ mod bytes (2^40))
-	| quot bytes (2^30) > 0 = (show $ quot bytes (2^30)) ++ " GiB " ++ (pritSizeInHumanReadableFormat $ mod bytes (2^30))
-	| quot bytes (2^20) > 0 = (show $ quot bytes (2^20)) ++ " MiB " ++ (pritSizeInHumanReadableFormat $ mod bytes (2^20))
-	| quot bytes (2^10) > 0 = (show $ quot bytes (2^10)) ++ " KiB " ++ (pritSizeInHumanReadableFormat $ mod bytes (2^10))
+allFileNames :: FileTree -> [FileName]
+allFileNames (Dir name contents) = join (map allFilePath contents)
+allFileNames (File name) = [unpack name] 
+allFileNames (Failed _) = []
+
+extentionCount :: FileTree -> M.Map String Int 
+extentionCount tree = foldl' (\map elem -> (M.insertWith (+) (key elem) 1 map)) M.empty (allFileNames tree)
+	where
+		key :: FileName -> String
+		key name = if elem '.' name 
+			then last $ splitOn "." name
+			else "."
+
+
+printSizeInHumanReadableFormat :: Integer -> String
+printSizeInHumanReadableFormat bytes 
+	| quot bytes (2^40) > 0 = (show $ quot bytes (2^40)) ++ " TiB " ++ (printSizeInHumanReadableFormat $ mod bytes (2^40))
+	| quot bytes (2^30) > 0 = (show $ quot bytes (2^30)) ++ " GiB " ++ (printSizeInHumanReadableFormat $ mod bytes (2^30))
+	| quot bytes (2^20) > 0 = (show $ quot bytes (2^20)) ++ " MiB " ++ (printSizeInHumanReadableFormat $ mod bytes (2^20))
+	| quot bytes (2^10) > 0 = (show $ quot bytes (2^10)) ++ " KiB " ++ (printSizeInHumanReadableFormat $ mod bytes (2^10))
 	| otherwise = (show bytes) ++ " Bytes " 
+

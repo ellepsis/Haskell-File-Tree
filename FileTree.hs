@@ -29,9 +29,8 @@ instance Binary FileTree where
 	put (File name)			= do 
 							put (0 :: Word8)
 							put (unpack name)
-	put (Dir name contents) = do 
+	put (Dir name contents)	= do 
 							put (1 :: Word8)
-							--put (length contents)
 							put (unpack name)
 							put contents
 	put (Failed name) 		= do
