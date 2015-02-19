@@ -27,7 +27,7 @@ import Numeric
 -- Files and Directories count: -c 
 -- No tree output                -v 
 
-data Option = Size | SizeInHumanReadableFormat | Count | NoTreeOutput | StatisticExtension | DifferenceArg (Maybe String) | Write String deriving (Eq, Show)
+data Option = Size | SizeInHumanReadableFormat | Count | NoTreeOutput | StatisticExtension | DifferenceArg (Maybe String) | Write String deriving (Eq)
 
 main =  do
     hSetEncoding stdout utf8
@@ -36,7 +36,6 @@ main =  do
     when ((nub options) == [NoTreeOutput]) (exitWith $ ExitSuccess)
     path <- (\x -> if (length x > 0) then return (head x) else getLine) (paths)
     putStrLn "Please wait... Construct tree"
-    putStrLn (show options)
     list <- Dir (pack $ init path) <$> getSubDirContents path
     putStrLn "Complite"
     options' <- (\x -> if (elem NoTreeOutput x) then return $ delete NoTreeOutput (x) else (putStrLn (show list) >> return x )) (nub options)
