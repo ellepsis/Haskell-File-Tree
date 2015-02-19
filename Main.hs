@@ -6,10 +6,13 @@ import System.Environment (getArgs)
 import System.IO
 import System.Console.GetOpt
 import System.Exit
+import System.Directory 
 import Control.Applicative
+import Control.Exception as E
 import Control.Monad
+import Data.Binary (decodeFile, encodeFile)
 import Data.List (delete, nub)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isNothing)
 import qualified Data.Map as M  
 import Data.Text (Text, pack, unpack)
 import Data.Tuple.Select (sel1, sel2, sel3)
@@ -18,13 +21,13 @@ import Numeric
 
 -- Supported options:
 -- input style
--- ./tree [-scvh] directory path
+-- ./tree [-d] [path] [-scvh] directory path
 -- Size:                         -s 
 -- Size in human format         -h
 -- Files and Directories count: -c 
 -- No tree output                -v 
 
-data Option = Size | SizeInHumanReadableFormat | Count | NoTreeOutput | StatisticExtension | DirectoryPath String deriving (Eq)
+data Option = Size | SizeInHumanReadableFormat | Count | NoTreeOutput | StatisticExtension | DifferenceArg (Maybe String) | Write String deriving (Eq, Show)
 
 main =  do
     hSetEncoding stdout utf8
@@ -32,43 +35,74 @@ main =  do
     (options, paths) <- compilerOpts args
     when ((nub options) == [NoTreeOutput]) (exitWith $ ExitSuccess)
     path <- (\x -> if (length x > 0) then return (head x) else getLine) (paths)
+    putStrLn "Please wait... Construct tree"
+    putStrLn (show options)
     list <- Dir (pack $ init path) <$> getSubDirContents path
-    str <- getLine
-    list2 <- Dir (pack $ init path) <$> getSubDirContents path
-    putStrLn $ show $ treeDifference list list2 path
+    putStrLn "Complite"
     options' <- (\x -> if (elem NoTreeOutput x) then return $ delete NoTreeOutput (x) else (putStrLn (show list) >> return x )) (nub options)
-    whatToDo options' list
+    whatToDo options' list path
     
 
 makeFileTree :: FilePath -> IO FileTree
 makeFileTree path = Dir (pack $ init path) <$> getSubDirContents path
 
-whatToDo :: [Option] -> FileTree -> IO ()
-whatToDo list tree
+whatToDo :: [Option] -> FileTree -> FilePath -> IO ()
+whatToDo list tree inputPath
+    | length (filter isDifferenceArg list) > 0 = do
+        let diffArg = head $ filter (isDifferenceArg) list
+        otherTree <- case diffArg of 
+            (DifferenceArg Nothing) -> do 
+                putStrLn "Press any key when changes will be completed..." 
+                getChar 
+                localTree <- Dir (pack $ init inputPath) <$> getSubDirContents inputPath
+                return (Just localTree)
+            (DifferenceArg (Just path)) -> do 
+                putStrLn "Load other tree"
+                fileExist <- doesFileExist path
+                if (fileExist) 
+                    then do
+                        inputTree <- decodeFile path
+                        return (Just inputTree)
+                    else (putStrLn "File dont exist") >> return Nothing
+        case otherTree of Nothing -> whatToDo (delete diffArg list) tree inputPath
+                          Just tree2 ->
+                             (putStrLn $ unlines $ map show $ treeDifference tree tree2 inputPath) >>
+                            whatToDo (delete diffArg list) tree inputPath
+    | length (filter isWriteArg list) > 0 = do
+        let (Write path) = head $ filter (isWriteArg) list
+        E.handle errorWriteTree (encodeFile path tree)
+        encodeFile path tree
     | elem StatisticExtension list = do
         let stat = extentionCount tree
         let filesCount = sel1 $ countFilesAndDirectories tree
-        putStrLn "Lal"
         putStrLn $ (\x -> show x ++ " Files without extension " ++ persent x filesCount) (dotCount stat)
         putStrLn $ unlines $ map (\(x,y) -> show y ++ "\t." ++ x ++ "\t\t" ++  persent y filesCount) (M.assocs stat)
-        whatToDo (delete StatisticExtension list) tree
+        whatToDo (delete StatisticExtension list) tree inputPath
     | elem Size list = do 
         dirSize <- directorySize "" tree
         putStrLn (show (length . sel2 $ dirSize) ++" Errors :" ++ (unlines . sel2 $ dirSize))
         list' <- if (elem SizeInHumanReadableFormat list) 
             then (putStrLn ("Size " ++ (printSizeInHumanReadableFormat . sel1 $ dirSize)) >> return (delete SizeInHumanReadableFormat list))
             else (putStrLn ("Size " ++ (show . sel1 $ dirSize)) >> return list)
-        whatToDo (delete Size list) tree
+        whatToDo (delete Size list) tree inputPath
     | elem Count list = do
         directoryAndFilesCount <- return $ countFilesAndDirectories tree
         putStrLn ("Directories "++ (show . sel2 $  directoryAndFilesCount))
         putStrLn ("Files " ++ (show . sel1 $  directoryAndFilesCount))
         putStrLn ("Permission errors " ++ (show . sel3 $  directoryAndFilesCount))
-        whatToDo (delete Count list) tree
+        whatToDo (delete Count list) tree inputPath
     | otherwise = return ()
     where
         dotCount :: M.Map String Int -> Int
         dotCount stat = fromMaybe 0 $ M.lookup "." stat
+        isDifferenceArg :: Option -> Bool
+        isDifferenceArg (DifferenceArg _) = True
+        isDifferenceArg _ = False 
+        isWriteArg :: Option -> Bool
+        isWriteArg (Write _) = True
+        isWriteArg _ = False
+        errorWriteTree :: SomeException -> IO ()
+        errorWriteTree _ = putStrLn "Error write tree" 
         persent ::  Int -> Int -> String
         persent a b = showGFloat (Just 2) (100*(fromIntegral(a)/(fromIntegral b))) "%"
 
@@ -78,8 +112,13 @@ options =
     , Option ['h']     ["human"]        (NoArg SizeInHumanReadableFormat)       "Show size in human readable format"
     , Option ['c']     ["count"]        (NoArg Count)                           "Files and Directories count"
     , Option ['v']     ["noTreeOutput"] (NoArg NoTreeOutput)                    "Suppress tree display"
-    , Option ['e']     ["statistic"]    (NoArg StatisticExtension)               "Show statistic extension"
+    , Option ['e']     ["statistic"]    (NoArg StatisticExtension)              "Show statistic extension"
+    , Option ['d']     ["difference"]   (OptArg makeArg "File")                 "Show difference between two trees"
+    , Option ['w']     ["write"]        (ReqArg Write "File")                   "Write tree to file"
     ] 
+
+makeArg :: Maybe String -> Option
+makeArg arg = DifferenceArg arg
 
 compilerOpts :: [String] -> IO ([Option], [String])
 compilerOpts argv = 

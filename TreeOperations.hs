@@ -14,7 +14,7 @@ data PathDifference = PathDifference FilePath [Difference]  deriving (Eq)
 data Difference = Added FileTree | Removed FileTree  deriving (Eq)
 
 instance Show PathDifference where
-    show (PathDifference path list) = "Folder" ++ path ++ "\n" ++ (unlines $ map show list)
+    show (PathDifference path list) = "Folder:" ++ path ++ "\n" ++ (unlines $ map show list) 
 
 instance Show Difference where
     show (Added tree)   = "--> " ++ (showTreeName tree)
@@ -72,9 +72,13 @@ treeDifference dir1@(Dir name1 contents1) dir2@(Dir name2 contents2) path =
             (\x -> if (elem x contents1) then Removed x else Added x)
             diffInThisFolder
         subDirectoryDifferences = join $ map 
-            (\(x,y) -> treeDifference x y $ path++"/"++(unpack $ name x))
+            (\(x,y) -> treeDifference x y $ addSubDirToPath path (unpack $ name x))
             $ getTreesWithTheSameName diffDirs
-    in thisDirectoryPathDifference:subDirectoryDifferences
+    in filter isNoEmptyDiff $ thisDirectoryPathDifference:subDirectoryDifferences
+    where
+        isNoEmptyDiff :: PathDifference -> Bool
+        isNoEmptyDiff (PathDifference path []) = False
+        isNoEmptyDiff _ = True
 treeDifference file1@(File name1) file2@(File name2) path = [PathDifference path [Removed file1, Added file2]]
 
 getTreesWithTheSameName :: [FileTree] -> [(FileTree, FileTree)]
@@ -93,3 +97,6 @@ printSizeInHumanReadableFormat bytes
     | quot bytes (2^10) > 0 = (show $ quot bytes (2^10)) ++ " KiB " ++ (printSizeInHumanReadableFormat $ mod bytes (2^10))
     | otherwise = (show bytes) ++ " Bytes " 
 
+addSubDirToPath :: String -> String-> String
+addSubDirToPath [] path = path
+addSubDirToPath path subDir = if (last path == '/') then path++subDir else path ++ "/" ++ subDir
