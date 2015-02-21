@@ -48,11 +48,13 @@ directorySize filePath fileTree =
                 sumSizes (allSize, errors) (Left size) = (allSize+size, errors)
                 sumSizes (allSize, errors) (Right string) = (allSize, string : errors)
 
+-- Return all possible file names
 allFileNames :: FileTree -> [FileName]
 allFileNames (Dir name contents) = join (map allFilePath contents)
 allFileNames (File name) = [unpack name] 
 allFileNames (Failed _) = []
 
+-- Return map of "extension name" -> "count"
 extentionCount :: FileTree -> M.Map String Int 
 extentionCount tree = foldl' (\map elem -> (M.insertWith (+) (key elem) 1 map)) M.empty (allFileNames tree)
     where
@@ -61,7 +63,8 @@ extentionCount tree = foldl' (\map elem -> (M.insertWith (+) (key elem) 1 map)) 
             then last $ splitOn "." name
             else "."
 
---Разобраться с отображением путей
+-- Return PathDifference between two trees 
+-- Tree1 -> Tree2 -> Initial Path -> Difference
 treeDifference :: FileTree -> FileTree -> FilePath -> [PathDifference]
 treeDifference dir1@(Dir name1 contents1) dir2@(Dir name2 contents2) path = 
     let diff = union (contents1 \\ contents2) (contents2 \\ contents1)
@@ -81,6 +84,7 @@ treeDifference dir1@(Dir name1 contents1) dir2@(Dir name2 contents2) path =
         isNoEmptyDiff _ = True
 treeDifference file1@(File name1) file2@(File name2) path = [PathDifference path [Removed file1, Added file2]]
 
+-- Return tree coulpe with same name
 getTreesWithTheSameName :: [FileTree] -> [(FileTree, FileTree)]
 getTreesWithTheSameName [] = []
 getTreesWithTheSameName (x:xs) = let
@@ -97,6 +101,7 @@ printSizeInHumanReadableFormat bytes
     | quot bytes (2^10) > 0 = (show $ quot bytes (2^10)) ++ " KiB " ++ (printSizeInHumanReadableFormat $ mod bytes (2^10))
     | otherwise = (show bytes) ++ " Bytes " 
 
+-- Concatenate file/dir name to path
 addSubDirToPath :: String -> String-> String
 addSubDirToPath [] path = path
 addSubDirToPath path subDir = if (last path == '/') then path++subDir else path ++ "/" ++ subDir

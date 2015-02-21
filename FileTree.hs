@@ -74,6 +74,7 @@ createTree currentDir filePaths isDir = do
 fileNameFromPath :: FilePath -> FileName
 fileNameFromPath fp = last (splitOn "/" fp)
 
+-- Return error file tree branch
 errorPathFileTree :: FilePath -> [FileTree]
 errorPathFileTree path = [Failed $ pack path]
 
